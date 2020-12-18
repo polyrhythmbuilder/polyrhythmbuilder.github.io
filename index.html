@@ -20,6 +20,10 @@
       align-items: center;
     }
 
+    p {
+      font-family: sans-serif;
+    }
+
     #controls {
       width: 50vw;
       display: flex;
@@ -36,10 +40,10 @@
 
     #grid {
       display: grid;
-      width: calc(25vw / 3);
+      width: calc(25vw / 2);
       height: 25vw;
       grid-template-columns: repeat(1, 1fr);
-      grid-template-rows: repeat(3, 1fr);
+      grid-template-rows: repeat(2, 1fr);
     }
 
     .cell {
@@ -60,15 +64,26 @@
 <body>
   <div id="controls">
     <div class="control-group">
-      <button id="start">Start</button>
+      <button id="start">Start/Stop</button>
     </div>
     <div class="control-group">
-      <input type="number" id="top"    name="top"    min="1" value="1">
+      <p>Polyrhythm</p>
+    </div>
+    <div class="control-group" id="rhythm-inputs">
+      <input type="number" class="rhythm" min="1" value="1" oninput="updatePoly()">
       <p>:</p>
-      <input type="number" id="bottom" name="bottom" min="1" value="1">
+      <input type="number" class="rhythm" min="1" value="1" oninput="updatePoly()">
     </div>
     <div class="control-group">
+      <button id="rhythm-add">Add</button>
+      <button id="rhythm-delete">Remove</button>
+    </div>
+    <div class="control-group">
+      <p>BPM</p>
       <input type="number" id="bpm" name="bpm" min="1" value="60">
+    </div>
+    <div class="control-group">
+      <p>Bottomost rhythm gets the beat</p>
     </div>
   </div>
   <div id="grid">
@@ -76,11 +91,19 @@
     <div class="cell"><div class="note"></div></div>
     <div class="cell"><div class="note"></div></div>
   </div>
-  <audio id="click">
-    <source src="Roland-PN-D10-03-Typewriting.wav" type="audio/mpeg">
-  </audio>
   <script type="text/javascript">
+    // Utility
+    function findGCD(a, b) {
+      return a ? findGCD(b % a, a) : b;
+    }
+
+    function findLCM(a, b) {
+      return a * b / findGCD(a, b);
+    }
+
     var unlocked = false; // Unlocked audio buffer
+    var running = false;
+    var lcm = 1;
     // This here is magic
     timeWorker = new Worker("metronomeworker.js");
     timeWorker.onmessage = function(e) {
@@ -107,19 +130,23 @@
         unlocked = true;
       }
 
-      nextNoteTime = audioContext.currentTime;
-      timeWorker.postMessage("start");
+      if (!running) {
+        nextNoteTime = audioContext.currentTime;
+        timeWorker.postMessage("start");
+        running = true;
+      } else {
+        timeWorker.postMessage("stop");
+        running = false;
+      }
+
     });
 
     // Next note
     function nextNote() {
-      var secondsPerBeat = 60.0 / $('#bpm').val();
+      var secondsPerBeat = 60.0 / $('#bpm').val() * $($('.rhythm')[$('.rhythm').length - 1]).val();
 
-      nextNoteTime += 0.25 * secondsPerBeat;
+      nextNoteTime += secondsPerBeat / lcm;
 
-      var top = $('#top').val();
-      var bottom = $('#bottom').val();
-      var lcm = top * bottom; // yes this is wrong, I know
       currentNote++;
       if (currentNote == lcm)
         currentNote = 0;
@@ -128,21 +155,13 @@
     function scheduleNote(beatNumber, time) {
       notesInQueue.push({note: beatNumber, time: time});
 
-      var top = $('#top').val();
-      var bottom = $('#bottom').val();
-      var lcm = top * bottom; // yes this is wrong, I know
-
       var frequency = 0;
-      if (beatNumber % top == 0 && beatNumber % bottom == 0) {
-        frequency = 880.0;
-      } else if (beatNumber % top == 0 || beatNumber % bottom == 0) {
-        if (beatNumber % top == 0) {
-          frequency = 440.0;
-        } else {
-          frequency = 300.0;
+      for (var i = 0; i < $('.rhythm').length; i++) {
+        if (beatNumber % $($('.rhythm')[i]).val() == 0) {
+          if (frequency == 0)
+            frequency = 400;
+          frequency += 100;
         }
-      } else {
-        //frequency = 220.0;
       }
 
       var osc = audioContext.createOscillator();
@@ -162,15 +181,22 @@
 
     // Visual stuff
     function updatePoly() {
-      var top = $('#top').val();
-      var bottom = $('#bottom').val();
-      var lcm = top * bottom; // yes this is wrong, I know
-      console.log(top);
+      var rhythms = [];
+      for (var r = 0; r < $('.rhythm').length; r++) {
+        rhythms.push($($('.rhythm')[r]).val());
+      }
+      // TODO: Actually find the lcm
+      lcm = rhythms.reduce(findLCM);
+      console.log(lcm);
 
       // Set dimensions
-      $('#grid').css({'grid-template-columns': 'repeat(' + lcm + ', 1fr)', 'width': 'calc(calc(25vw / 3) * ' + lcm + ')'});
+      $('#grid').css({
+        'grid-template-columns': 'repeat(' + lcm + ', 1fr)',
+        'grid-template-rows': 'repeat(' + rhythms.length + ', 1fr)',
+        'width': 'calc(calc(25vw / ' + rhythms.length + ') * ' + lcm + ')'
+      });
       if ($('#grid').width() > $(window).width()) {
-        $('#grid').css({'width': '50vw', 'height': 'calc(calc(50vw / ' + lcm + ') * 3)'});
+        $('#grid').css({'width': '50vw', 'height': 'calc(calc(50vw / ' + lcm + ') * ' + rhythms.length + ')'});
       }
       else {
         $('#grid').css({'height': '25vw'});
@@ -178,24 +204,33 @@
 
       // Fill up grid
       $('#grid').empty();
-      for (var i = 0; i < lcm * 3; i++) {
+      for (var i = 0; i < lcm * rhythms.length; i++) {
         $('#grid').append('<div class="cell"></div>')
       }
 
-      // Fill in notes
-      $($('.cell')[0]).append('<div class="note"></div>')
-      for (var i = lcm * 1; i < lcm * 2; i++) {
-        if (i % bottom == 0)
-          $($('.cell')[i]).append('<div class="note"></div>');
-      }
-      for (var i = lcm * 2; i < lcm * 3; i++) {
-        if (i % top == 0)
-          $($('.cell')[i]).append('<div class="note"></div>');
+      // Loop through every rhythm
+      for (var r = 0; r < rhythms.length; r++) {
+        for (var cell = lcm * r; cell < lcm * (r + 1); cell++) {
+          if ((cell % lcm) % rhythms[rhythms.length - 1 - r] == 0) {
+            $($('.cell')[cell]).append('<div class="note"></div>');
+          }
+        }
       }
     }
 
-    $('#top'   ).on('input', updatePoly);
-    $('#bottom').on('input', updatePoly);
+    // Add rhythms
+    $('#rhythm-add').click(function(){
+      $('#rhythm-inputs').append('<p>:</p><input type="number" class="rhythm" min="1" value="1" oninput="updatePoly()">');
+      updatePoly();
+    });
+
+    $('#rhythm-delete').click(function(){
+      if ($('.rhythm').length > 1) {
+        $('#rhythm-inputs').children().last().remove();
+        $('#rhythm-inputs').children().last().remove();
+        updatePoly();
+      }
+    });
   </script>
 </body>
 </html>
