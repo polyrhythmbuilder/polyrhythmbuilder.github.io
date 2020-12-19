@@ -33,16 +33,17 @@
       margin-bottom: 32px;
     }
 
+    @media only screen and (max-width: 600px) {
+      #controls {
+        width: 98vw;
+      }
+    }
+
     .control-group {
       display: flex;
       justify-content: space-around;
       margin-bottom: 16px;
       overflow-x: scroll;
-    }
-
-    .control-group button, .control-group input {
-      flex-grow: 1;
-      box-sizing: border-box;
     }
 
     #grid {
