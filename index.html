@@ -2,6 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Polyrhythm Builder</title>
   <script
 			  src="https://code.jquery.com/jquery-3.5.1.min.js"
@@ -83,7 +84,7 @@
       <input type="number" id="bpm" name="bpm" min="1" value="60">
     </div>
     <div class="control-group">
-      <p>Bottomost rhythm gets the beat</p>
+      <p>Bottomost number gets the beat</p>
     </div>
   </div>
   <div id="grid">
@@ -161,8 +162,8 @@
       for (var i = 0; i < $('.rhythm').length; i++) {
         if (beatNumber % $($('.rhythm')[i]).val() == 0) {
           if (frequency == 0)
-            frequency = 400;
-          frequency += 100;
+            frequency = 660 + 10 * i;
+          frequency += 400;
         }
       }
 
@@ -192,7 +193,7 @@
 
     // Visual stuff
     function updatePoly() {
-      var rhythms = [];
+      var rhythms = [];1
       for (var r = 0; r < $('.rhythm').length; r++) {
         rhythms.push($($('.rhythm')[r]).val());
       }
